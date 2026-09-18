@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function owns(field) { return signedIn() && request.auth.uid == field; }
+    function validText(value, max) { return value is string && value.size() > 0 && value.size() <= max; }
+    function validListing(data) {
+      return validText(data.title, 80) && validText(data.description, 800)
+        && data.category in ['Books','Electronics','Lab supplies','Hostel essentials','Stationery','Other']
+        && data.condition in ['Like new','Excellent','Good','Fair']
+        && data.price is number && data.price >= 0 && data.price <= 100000
+        && data.status in ['ACTIVE','SOLD','ARCHIVED'];
+    }
+    match /listings/{id} {
+      allow read: if signedIn();
+      allow create: if owns(request.resource.data.sellerId) && validListing(request.resource.data);
+      allow update, delete: if owns(resource.data.sellerId) && owns(request.resource.data.sellerId) && validListing(request.resource.data);
+    }
+    match /favorites/{id} {
+      allow read, create, delete: if owns(resource.data.userId) || owns(request.resource.data.userId);
+    }
+    match /contactRequests/{id} {
+      allow read: if signedIn() && (resource.data.buyerId == request.auth.uid || resource.data.sellerId == request.auth.uid);
+      allow create: if owns(request.resource.data.buyerId) && validText(request.resource.data.message, 300) && request.resource.data.status == 'PENDING';
+      allow update: if signedIn() && resource.data.sellerId == request.auth.uid
+        && request.resource.data.buyerId == resource.data.buyerId
+        && request.resource.data.sellerId == resource.data.sellerId
+        && request.resource.data.status in ['ACCEPTED','DECLINED'];
+    }
+    match /lostFound/{id} {
+      allow read: if signedIn();
+      allow create: if owns(request.resource.data.reporterId)
+        && request.resource.data.type in ['LOST','FOUND']
+        && validText(request.resource.data.title,80) && validText(request.resource.data.description,800)
+        && validText(request.resource.data.zone,100) && request.resource.data.status == 'OPEN';
+      allow update, delete: if owns(resource.data.reporterId) && owns(request.resource.data.reporterId);
+    }
+  }
+}

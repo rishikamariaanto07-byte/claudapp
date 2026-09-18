@@ -1,0 +1,18 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() { return request.auth != null; }
+    function imageUpload() {
+      return request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+    }
+    match /listings/{userId}/{fileName} {
+      allow read: if signedIn();
+      allow write: if signedIn() && request.auth.uid == userId && imageUpload();
+    }
+    match /lost-found/{userId}/{fileName} {
+      allow read: if signedIn();
+      allow write: if signedIn() && request.auth.uid == userId && imageUpload();
+    }
+  }
+}
